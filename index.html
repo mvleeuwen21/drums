@@ -55,6 +55,12 @@
       gap: 6px;
       margin-bottom: 12px;
       align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--bg);
+      padding: 8px 0 8px;
+      border-bottom: 0.5px solid var(--border);
     }
 
     .toolbar-group {
@@ -109,7 +115,6 @@
       border: 0.5px solid var(--border);
       border-radius: var(--radius-lg);
       background: var(--bg);
-      overflow-x: auto;
       padding: 8px;
     }
 
@@ -270,16 +275,20 @@ let players      = {};
 const canvas = document.getElementById('staff');
 const ctx    = canvas.getContext('2d');
 
+const LABEL_W    = 80;
+const PAD_R      = 20;
+
 const lineY      = line => STAFF_TOP + line * LINE_SPACE;
 const bpRowBeats = ()   => barsPerRow * beatsPerBar * subdivision;
 const rowOf      = b    => Math.floor(b / bpRowBeats());
 const colBeat    = b    => b % bpRowBeats();
-const beatX      = b    => 80 + colBeat(b) * 36;
+const slotW      = ()   => Math.max(18, (canvas.width - LABEL_W - PAD_R) / bpRowBeats());
+const beatX      = b    => LABEL_W + colBeat(b) * slotW();
 const numRows    = ()   => Math.ceil(numBars / barsPerRow);
 const totalBeats = ()   => numBars * beatsPerBar * subdivision;
 
 function resizeCanvas() {
-  canvas.width  = Math.max(820, 80 + bpRowBeats() * 36 + 20);
+  canvas.width  = canvas.parentElement.clientWidth - 18;
   canvas.height = numRows() * ROW_HEIGHT + 20;
   draw();
 }
@@ -365,8 +374,9 @@ function drawRow(row, C, w) {
 
     // Playback highlight
     if (currentBeat === b && isPlaying) {
+      const hw = Math.min(14, slotW() * 0.45);
       ctx.fillStyle = C.playFill;
-      ctx.fillRect(x - 14, lineY(1), 28, lineY(10) - lineY(1) + 8);
+      ctx.fillRect(x - hw, lineY(1), hw * 2, lineY(10) - lineY(1) + 8);
       ctx.strokeStyle  = C.playLine;
       ctx.lineWidth    = 1.5;
       ctx.setLineDash([2, 3]);
@@ -519,7 +529,7 @@ function snapToBeat(mx, row) {
     const d = Math.abs(mx - beatX(b));
     if (d < dist) { dist = d; closest = b; }
   }
-  return dist <= 22 ? closest : null;
+  return dist <= slotW() * 0.6 ? closest : null;
 }
 
 function findNoteNear(mx, my) {
@@ -699,6 +709,7 @@ function printScore() {
 //  INIT
 // ─────────────────────────────────────────────
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 </script>
 
