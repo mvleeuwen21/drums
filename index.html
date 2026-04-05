@@ -210,11 +210,6 @@
     <span style="font-size:11px;color:var(--text2)">bpm</span>
   </div>
 
-  <div class="toolbar-group">
-    <span class="toolbar-label">Kopieer maat</span>
-    <input type="number" id="copy-bar" value="1" min="1" step="1" placeholder="nr">
-    <button class="drum-btn" onclick="copyBar()">⎘ Kopieer</button>
-  </div>
 
   <button class="action-btn play" id="play-btn" onclick="togglePlay()">▶ Afspelen</button>
   <button class="action-btn stop" onclick="stopPlay()">■ Stop</button>
@@ -337,12 +332,12 @@ function draw() {
   for (let row = 0; row < numRows(); row++) {
     ctx.save();
     ctx.translate(0, row * ROW_HEIGHT);
-    drawRow(row, C, w);
+    drawRow(row, C, w, dark);
     ctx.restore();
   }
 }
 
-function drawRow(row, C, w) {
+function drawRow(row, C, w, dark) {
   const firstBeat = row * bpRowBeats();
   const rowBars   = Math.min(barsPerRow, numBars - row * barsPerRow);
   const rowBeats  = rowBars * beatsPerBar * subdivision;
@@ -442,7 +437,51 @@ function drawRow(row, C, w) {
     { line: 10, text: 'BD' },
   ].forEach(l => ctx.fillText(l.text, 4, lineY(l.line) + 4));
 
-  // Notes for this row
+  // ── Beaming ──
+  // For each stem direction, find runs of consecutive beats with notes and connect them.
+  const rowNotesAll = notes.filter(n => rowOf(n.beat) === row);
+  const beamedNotes = new Set();
+
+  for (const dir of [1, -1]) {  // 1 = stem-down (line<5), -1 = stem-up (line>=5)
+    const dirNotes   = rowNotesAll.filter(n => dir === 1 ? n.line < 5 : n.line >= 5);
+    if (dirNotes.length < 2) continue;
+
+    const uniqueBeats = [...new Set(dirNotes.map(n => colBeat(n.beat)))].sort((a, b) => a - b);
+    let runStart = 0;
+    for (let k = 1; k <= uniqueBeats.length; k++) {
+      if (k === uniqueBeats.length || uniqueBeats[k] !== uniqueBeats[k - 1] + 1) {
+        if (k - runStart >= 2) {
+          const runSet  = new Set(uniqueBeats.slice(runStart, k));
+          const group   = dirNotes.filter(n => runSet.has(colBeat(n.beat)));
+          const beamY   = dir === 1
+            ? Math.max(...group.map(n => lineY(n.line) + 36))
+            : Math.min(...group.map(n => lineY(n.line) - 36));
+          const bs      = [...runSet].sort((a, b) => a - b);
+          const x0      = LABEL_W + bs[0] * slotW() + 7;
+          const x1      = LABEL_W + bs[bs.length - 1] * slotW() + 7;
+
+          ctx.strokeStyle = C.note;
+          ctx.setLineDash([]);
+          ctx.lineWidth   = 1.5;
+          for (const n of group) {
+            ctx.beginPath();
+            ctx.moveTo(beatX(n.beat) + 7, lineY(n.line) + (dir === 1 ? 5 : -5));
+            ctx.lineTo(beatX(n.beat) + 7, beamY);
+            ctx.stroke();
+            beamedNotes.add(n);
+          }
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(x0, beamY);
+          ctx.lineTo(x1, beamY);
+          ctx.stroke();
+        }
+        runStart = k;
+      }
+    }
+  }
+
+  // ── Note heads ──
   for (const n of notes) {
     if (rowOf(n.beat) !== row) continue;
     const x   = beatX(n.beat);
@@ -468,14 +507,17 @@ function drawRow(row, C, w) {
       ctx.fill();
     }
 
-    // Stem
-    const stemY1 = n.line < 5 ? y + 5 : y - 5;
-    const stemY2 = n.line < 5 ? y + 36 : y - 36;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x + 7, stemY1);
-    ctx.lineTo(x + 7, stemY2);
-    ctx.stroke();
+    // Standalone stem (only for notes not in a beam group)
+    if (!beamedNotes.has(n)) {
+      const stemY1 = n.line < 5 ? y + 5 : y - 5;
+      const stemY2 = n.line < 5 ? y + 36 : y - 36;
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x + 7, stemY1);
+      ctx.lineTo(x + 7, stemY2);
+      ctx.stroke();
+    }
 
     // Ledger lines for notes outside staff
     if (n.line <= 0 || n.line >= 10) {
@@ -486,6 +528,18 @@ function drawRow(row, C, w) {
       ctx.lineTo(x + 12, y);
       ctx.stroke();
     }
+  }
+
+  // ── Copy buttons (＋) above each bar ──
+  const barSize = beatsPerBar * subdivision;
+  for (let b = 0; b < rowBars; b++) {
+    const cx = LABEL_W + (b * barSize + barSize / 2) * slotW();
+    const cy = STAFF_TOP - 18;
+    ctx.fillStyle  = dark ? '#555' : '#bbb';
+    ctx.font       = 'bold 14px sans-serif';
+    ctx.textAlign  = 'center';
+    ctx.fillText('+', cx, cy);
+    ctx.textAlign  = 'left';
   }
 }
 
@@ -506,6 +560,21 @@ canvas.addEventListener('mousemove', function(e) {
 
 canvas.addEventListener('mousedown', function(e) {
   const { mx, my, row, localY } = canvasCoords(e);
+
+  // Check copy buttons above each bar
+  const barSize = beatsPerBar * subdivision;
+  for (let r = 0; r < numRows(); r++) {
+    const firstBar = r * barsPerRow;
+    const rowBars  = Math.min(barsPerRow, numBars - firstBar);
+    const cy       = r * ROW_HEIGHT + (STAFF_TOP - 18);
+    for (let b = 0; b < rowBars; b++) {
+      const cx = LABEL_W + (b * barSize + barSize / 2) * slotW();
+      if (Math.abs(mx - cx) < 14 && Math.abs(my - cy) < 12) {
+        copyBarNum(firstBar + b + 1);
+        return;
+      }
+    }
+  }
 
   if (erasing) {
     const n = findNoteNear(mx, my);
@@ -594,25 +663,16 @@ function updateTempoFromInput() {
   document.getElementById('tempo-slider').value = tempo;
 }
 
-function copyBar() {
-  const barNum = parseInt(document.getElementById('copy-bar').value);
-  if (isNaN(barNum) || barNum < 1 || barNum > numBars) {
-    document.getElementById('status-msg').textContent = `Ongeldige maat (1–${numBars}).`;
-    return;
-  }
+function copyBarNum(barNum) {
   const barSize  = beatsPerBar * subdivision;
   const srcStart = (barNum - 1) * barSize;
   const srcEnd   = barNum * barSize;
 
-  // Save copies of the source bar notes before shifting
   const copied = notes
     .filter(n => n.beat >= srcStart && n.beat < srcEnd)
     .map(n => ({ ...n, beat: n.beat + barSize }));
 
-  // Shift all notes after the source bar one bar forward
   notes.forEach(n => { if (n.beat >= srcEnd) n.beat += barSize; });
-
-  // Insert the copied notes
   notes.push(...copied);
 
   numBars++;
