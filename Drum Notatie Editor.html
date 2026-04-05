@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<!-- saved from url=(0058)file:///C:/Users/mvlee/Downloads/drum_notation_editor.html -->
+<html lang="nl"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drum Notatie Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #ffffff;
+      --bg2:         #f5f5f3;
+      --bg3:         #ebebea;
+      --text:        #111111;
+      --text2:       #555550;
+      --border:      #d0cfca;
+      --border2:     #b8b7b2;
+      --selected:    #2a7adb;
+      --danger:      #e24b4a;
+      --radius-md:   8px;
+      --radius-lg:   12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:     #1a1a1a;
+        --bg2:    #242424;
+        --bg3:    #2e2e2e;
+        --text:   #e8e8e6;
+        --text2:  #888884;
+        --border: #3a3a38;
+        --border2:#555552;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .toolbar-group {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      background: var(--bg2);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 4px 8px;
+    }
+
+    .toolbar-label {
+      font-size: 11px;
+      color: var(--text2);
+      margin-right: 4px;
+    }
+
+    .drum-btn {
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 0.5px solid var(--border2);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.1s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .drum-btn:hover { background: var(--bg3); }
+    .drum-btn.active { background: var(--selected); color: #fff; border-color: var(--selected); }
+
+    .action-btn {
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 0.5px solid var(--border2);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .action-btn:hover { background: var(--bg2); }
+    .action-btn.play  { background: var(--selected); color: #fff; border-color: var(--selected); }
+    .action-btn.play:hover  { background: #1f65c0; }
+    .action-btn.stop  { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .action-btn.stop:hover  { background: #c33; }
+
+    /* ── Canvas ── */
+    .canvas-wrap {
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg);
+      overflow-x: auto;
+      padding: 8px;
+    }
+
+    canvas { display: block; cursor: crosshair; }
+
+    /* ── Info bar ── */
+    .info-bar {
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text2);
+      background: var(--bg2);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 0.5px solid var(--border);
+    }
+
+    /* ── Tempo ── */
+    .tempo-row { display: flex; align-items: center; gap: 8px; }
+    .tempo-row input[type=range] { width: 90px; accent-color: var(--selected); }
+    .tempo-row span { font-size: 13px; font-weight: 500; min-width: 42px; }
+
+    select {
+      font-size: 12px;
+      padding: 4px;
+      border-radius: 6px;
+      border: 0.5px solid var(--border2);
+      background: var(--bg);
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+<h1>Drum Notatie Editor</h1>
+
+<div class="toolbar">
+  <div class="toolbar-group">
+    <span class="toolbar-label">Noot</span>
+    <button class="drum-btn active" id="btn-BD" onclick="selectDrum(&#39;BD&#39;)">● Bass Drum</button>
+    <button class="drum-btn" id="btn-SD" onclick="selectDrum(&#39;SD&#39;)">● Snare</button>
+    <button class="drum-btn" id="btn-HH" onclick="selectDrum(&#39;HH&#39;)">× Hi-Hat</button>
+    <button class="drum-btn" id="btn-OHH" onclick="selectDrum(&#39;OHH&#39;)">○ Open HH</button>
+    <button class="drum-btn" id="btn-RT" onclick="selectDrum(&#39;RT&#39;)">× Ride</button>
+    <button class="drum-btn" id="btn-CR" onclick="selectDrum(&#39;CR&#39;)">× Crash</button>
+    <button class="drum-btn" id="btn-T1" onclick="selectDrum(&#39;T1&#39;)">● Tom 1</button>
+    <button class="drum-btn" id="btn-T2" onclick="selectDrum(&#39;T2&#39;)">● Tom 2</button>
+    <button class="drum-btn" id="btn-FT" onclick="selectDrum(&#39;FT&#39;)">● Floor Tom</button>
+  </div>
+
+  <div class="toolbar-group">
+    <span class="toolbar-label">Maat</span>
+    <select id="sig-sel" onchange="changeSig()">
+      <option value="4">4/4</option>
+      <option value="3">3/4</option>
+      <option value="6">6/8</option>
+    </select>
+  </div>
+
+  <div class="toolbar-group tempo-row">
+    <span class="toolbar-label">Tempo</span>
+    <input type="range" id="tempo" min="40" max="220" value="100" step="1" oninput="updateTempo()">
+    <span id="tempo-val">100</span>
+    <span style="font-size:11px;color:var(--text2)">bpm</span>
+  </div>
+
+  <button class="action-btn play" id="play-btn" onclick="togglePlay()">▶ Afspelen</button>
+  <button class="action-btn stop" onclick="stopPlay()">■ Stop</button>
+  <button class="action-btn" onclick="clearAll()">Wis alles</button>
+  <button class="action-btn" onclick="addBar()">+ Maat</button>
+  <button class="action-btn" onclick="removeBar()">− Maat</button>
+  <button class="action-btn" id="eraser-btn" onclick="toggleEraser()">⌫ Gum</button>
+  <button class="action-btn" onclick="saveFile()">💾 Opslaan</button>
+  <button class="action-btn" onclick="loadFile()">📂 Inladen</button>
+  <button class="action-btn" onclick="printScore()">🖨 Printen</button>
+  <input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFileLoad(event)">
+</div>
+
+<div class="canvas-wrap">
+  <canvas id="staff" width="820" height="280"></canvas>
+</div>
+
+<div class="info-bar">
+  <span id="status-msg">Selecteer een drumstem en klik op de notenbalk om noten te plaatsen.</span>
+  <span id="beat-indicator" style="font-weight:500;color:var(--selected);"></span>
+</div>
+
+<div class="legend">
+  <div class="legend-item">● Gevulde noot = gewone slag</div>
+  <div class="legend-item">× Kruis = cimbaal / hi-hat</div>
+  <div class="legend-item">○ Open cirkel = open hi-hat</div>
+</div>
+
+<!-- Tone.js via CDN -->
+<script src="./Drum Notatie Editor_files/Tone.js.download"></script>
+<script>
+// ─────────────────────────────────────────────
+//  DRUM MAP
+//  line: stafpositie (0 = boven cimbalen, 10 = bass drum)
+//  symbol: 'filled' | 'cross' | 'open'
+// ─────────────────────────────────────────────
+const DRUM_MAP = {
+  BD:  { name: 'Bass Drum',  midi: 36, line: 10, symbol: 'filled' },
+  SD:  { name: 'Snare',      midi: 38, line:  7, symbol: 'filled' },
+  HH:  { name: 'Hi-Hat',     midi: 42, line:  1, symbol: 'cross'  },
+  OHH: { name: 'Open HH',    midi: 46, line:  1, symbol: 'open'   },
+  RT:  { name: 'Ride',       midi: 51, line:  0, symbol: 'cross'  },
+  CR:  { name: 'Crash',      midi: 49, line: -1, symbol: 'cross'  },
+  T1:  { name: 'Tom 1',      midi: 48, line:  3, symbol: 'filled' },
+  T2:  { name: 'Tom 2',      midi: 45, line:  5, symbol: 'filled' },
+  FT:  { name: 'Floor Tom',  midi: 41, line:  8, symbol: 'filled' },
+};
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+const STAFF_TOP  = 60;
+const LINE_SPACE = 12;
+
+let beatsPerBar  = 4;
+let subdivision  = 2;   // 2 = 8ths per beat
+let numBars      = 2;
+let tempo        = 100;
+let selectedDrum = 'BD';
+let erasing      = false;
+let notes        = [];   // { beat, drum, line }
+
+let isPlaying    = false;
+let playTimer    = null;
+let currentBeat  = -1;
+let audioReady   = false;
+let playerReady  = false;
+let players      = {};
+
+// ─────────────────────────────────────────────
+//  CANVAS HELPERS
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('staff');
+const ctx    = canvas.getContext('2d');
+
+const lineY      = line => STAFF_TOP + line * LINE_SPACE;
+const beatX      = b    => 80 + b * 36;
+const totalBeats = ()   => numBars * beatsPerBar * subdivision;
+
+function getCanvasWidth() {
+  return Math.max(820, 80 + totalBeats() * 36 + 20);
+}
+
+function resizeCanvas() {
+  canvas.width = getCanvasWidth();
+  draw();
+}
+
+// ─────────────────────────────────────────────
+//  DRAW
+// ─────────────────────────────────────────────
+function draw() {
+  const w    = canvas.width;
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const C = {
+    bg:       dark ? '#1a1a1a' : '#ffffff',
+    line:     dark ? '#555'    : '#999',
+    text:     dark ? '#ccc'    : '#333',
+    barLine:  dark ? '#888'    : '#666',
+    note:     dark ? '#eee'    : '#111',
+    ledger:   dark ? '#666'    : '#aaa',
+    playFill: '#2a7adb22',
+    playLine: '#2a7adb',
+    subdiv:   dark ? '#333'    : '#e8e8e8',
+  };
+
+  ctx.clearRect(0, 0, w, canvas.height);
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, w, canvas.height);
+
+  // Staff lines (5 lines)
+  for (let i = 0; i < 5; i++) {
+    const y = lineY(i * 2 + 2);
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth   = 0.8;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(50, y);
+    ctx.lineTo(w - 10, y);
+    ctx.stroke();
+  }
+
+  // Bar lines
+  ctx.strokeStyle = C.barLine;
+  ctx.lineWidth   = 1.5;
+  for (let b = 0; b <= numBars; b++) {
+    const x = beatX(b * beatsPerBar * subdivision);
+    ctx.beginPath();
+    ctx.moveTo(x, lineY(2));
+    ctx.lineTo(x, lineY(10));
+    ctx.stroke();
+  }
+
+  // Drum clef (%)
+  ctx.font      = 'bold 28px serif';
+  ctx.fillStyle = C.text;
+  ctx.fillText('%', 18, lineY(5) + 8);
+
+  // Time signature
+  ctx.font      = 'bold 16px serif';
+  ctx.fillStyle = C.text;
+  ctx.fillText(beatsPerBar, 42, lineY(4) + 4);
+  ctx.fillText('4',         42, lineY(7) + 4);
+
+  // Beat slots
+  for (let b = 0; b < totalBeats(); b++) {
+    const x           = beatX(b);
+    const isBeatStart = b % subdivision === 0;
+    const beatNum     = Math.floor(b / subdivision) % beatsPerBar + 1;
+
+    // Playback highlight
+    if (currentBeat === b && isPlaying) {
+      ctx.fillStyle = C.playFill;
+      ctx.fillRect(x - 14, lineY(1), 28, lineY(10) - lineY(1) + 8);
+      ctx.strokeStyle  = C.playLine;
+      ctx.lineWidth    = 1.5;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, lineY(1));
+      ctx.lineTo(x, lineY(10) + 8);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Beat number
+    if (isBeatStart) {
+      ctx.font      = '11px sans-serif';
+      ctx.fillStyle = C.text;
+      ctx.fillText(beatNum, x - 4, lineY(12));
+    }
+
+    // Sub-division dashes
+    if (isBeatStart && subdivision > 1) {
+      for (let s = 1; s < subdivision; s++) {
+        const sx = beatX(b + s);
+        ctx.strokeStyle = C.subdiv;
+        ctx.lineWidth   = 0.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(sx, lineY(2));
+        ctx.lineTo(sx, lineY(10));
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Instrument labels (left of staff)
+  ctx.font      = '10px sans-serif';
+  ctx.fillStyle = dark ? '#888' : '#aaa';
+  [
+    { line: -1, text: 'CR' },
+    { line:  0, text: 'RD' },
+    { line:  1, text: 'HH' },
+    { line:  3, text: 'T1' },
+    { line:  5, text: 'T2' },
+    { line:  7, text: 'SN' },
+    { line:  8, text: 'FT' },
+    { line: 10, text: 'BD' },
+  ].forEach(l => ctx.fillText(l.text, 4, lineY(l.line) + 4));
+
+  // Notes
+  for (const n of notes) {
+    const x    = beatX(n.beat);
+    const y    = lineY(n.line);
+    const col  = n === hoveredNote ? '#2a7adb' : C.note;
+    const dm   = DRUM_MAP[n.drum];
+
+    ctx.fillStyle   = col;
+    ctx.strokeStyle = col;
+    ctx.setLineDash([]);
+
+    if (dm.symbol === 'cross') {
+      ctx.font = 'bold 16px serif';
+      ctx.fillText('×', x - 6, y + 6);
+    } else if (dm.symbol === 'open') {
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.ellipse(x, y, 7, 5, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Stem
+    const stemY1 = n.line < 5 ? y + 5 : y - 5;
+    const stemY2 = n.line < 5 ? y + 36 : y - 36;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x + 7, stemY1);
+    ctx.lineTo(x + 7, stemY2);
+    ctx.stroke();
+
+    // Ledger lines for notes outside staff
+    if (n.line <= 0 || n.line >= 10) {
+      ctx.strokeStyle = C.ledger;
+      ctx.lineWidth   = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x - 12, y);
+      ctx.lineTo(x + 12, y);
+      ctx.stroke();
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+//  CANVAS INTERACTION
+// ─────────────────────────────────────────────
+let hoveredNote = null;
+
+canvas.addEventListener('mousemove', function(e) {
+  if (isPlaying) return;
+  const { mx, my } = canvasCoords(e);
+  hoveredNote = erasing ? findNoteNear(mx, my) : null;
+  canvas.style.cursor = erasing
+    ? (hoveredNote ? 'not-allowed' : 'crosshair')
+    : 'crosshair';
+  draw();
+});
+
+canvas.addEventListener('mousedown', function(e) {
+  const { mx, my } = canvasCoords(e);
+
+  if (erasing) {
+    const n = findNoteNear(mx, my);
+    if (n) notes = notes.filter(x => x !== n);
+    draw();
+    return;
+  }
+
+  const closestBeat = snapToBeat(mx);
+  if (closestBeat === null) return;
+
+  const dm      = DRUM_MAP[selectedDrum];
+  const targetY = lineY(dm.line);
+  if (Math.abs(my - targetY) > 18) return;
+
+  const idx = notes.findIndex(n => n.beat === closestBeat && n.drum === selectedDrum);
+  if (idx >= 0) {
+    notes.splice(idx, 1);
+  } else {
+    notes.push({ beat: closestBeat, drum: selectedDrum, line: dm.line });
+    document.getElementById('status-msg').textContent =
+      `${dm.name} geplaatst op tel ${Math.floor(closestBeat / subdivision) % beatsPerBar + 1}`;
+  }
+  draw();
+});
+
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    mx: (e.clientX - rect.left) * (canvas.width  / rect.width),
+    my: (e.clientY - rect.top)  * (canvas.height / rect.height),
+  };
+}
+
+function snapToBeat(mx) {
+  let closest = null, dist = 99;
+  for (let b = 0; b < totalBeats(); b++) {
+    const d = Math.abs(mx - beatX(b));
+    if (d < dist) { dist = d; closest = b; }
+  }
+  return dist <= 22 ? closest : null;
+}
+
+function findNoteNear(mx, my) {
+  return notes.find(n => Math.abs(mx - beatX(n.beat)) < 14 && Math.abs(my - lineY(n.line)) < 14) || null;
+}
+
+// ─────────────────────────────────────────────
+//  TOOLBAR ACTIONS
+// ─────────────────────────────────────────────
+function selectDrum(d) {
+  selectedDrum = d;
+  erasing      = false;
+  document.getElementById('eraser-btn').classList.remove('active');
+  document.querySelectorAll('.drum-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + d).classList.add('active');
+  document.getElementById('status-msg').textContent =
+    `Geselecteerd: ${DRUM_MAP[d].name} — klik op de notenbalk.`;
+}
+
+function toggleEraser() {
+  erasing = !erasing;
+  document.getElementById('eraser-btn').classList.toggle('active', erasing);
+  document.getElementById('status-msg').textContent =
+    erasing ? 'Gummodus: klik op een noot om te wissen.' : 'Plaatsmodus actief.';
+}
+
+function clearAll()   { notes = []; draw(); }
+function addBar()     { numBars++; resizeCanvas(); }
+function removeBar()  { if (numBars > 1) { numBars--; notes = notes.filter(n => n.beat < totalBeats()); resizeCanvas(); } }
+function updateTempo(){ tempo = parseInt(document.getElementById('tempo').value); document.getElementById('tempo-val').textContent = tempo; }
+
+function changeSig() {
+  beatsPerBar = parseInt(document.getElementById('sig-sel').value);
+  notes = [];
+  resizeCanvas();
+}
+
+// ─────────────────────────────────────────────
+//  AUDIO (Tone.js)
+// ─────────────────────────────────────────────
+async function initAudio() {
+  if (!audioReady) { await Tone.start(); audioReady = true; }
+}
+
+function makeSynths() {
+  players = {
+    BD:  new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 6,   envelope: { attack: 0.001, decay: 0.35, sustain: 0, release: 0.1 } }).toDestination(),
+    SD:  new Tone.NoiseSynth  ({ noise: { type: 'white' },         envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.05 } }).toDestination(),
+    HH:  new Tone.MetalSynth  ({ frequency: 400, harmonicity: 5.1, modulationIndex: 32,  resonance: 4000, octaves: 1.5, envelope: { attack: 0.001, decay: 0.04,  release: 0.01 } }).toDestination(),
+    OHH: new Tone.MetalSynth  ({ frequency: 400, harmonicity: 5.1, modulationIndex: 32,  resonance: 4000, octaves: 1.5, envelope: { attack: 0.001, decay: 0.18,  release: 0.05 } }).toDestination(),
+    RT:  new Tone.MetalSynth  ({ frequency: 350, harmonicity: 3.1, modulationIndex: 16,  resonance: 3200, octaves: 1.5, envelope: { attack: 0.001, decay: 0.25,  release: 0.06 } }).toDestination(),
+    CR:  new Tone.MetalSynth  ({ frequency: 300, harmonicity: 5.1, modulationIndex: 64,  resonance: 6000, octaves: 1.5, envelope: { attack: 0.001, decay: 0.5,   release: 0.2  } }).toDestination(),
+    T1:  new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 4,   envelope: { attack: 0.001, decay: 0.22, sustain: 0, release: 0.08 } }).toDestination(),
+    T2:  new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 3.5, envelope: { attack: 0.001, decay: 0.26, sustain: 0, release: 0.08 } }).toDestination(),
+    FT:  new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 3,   envelope: { attack: 0.001, decay: 0.3,  sustain: 0, release: 0.1  } }).toDestination(),
+  };
+  const vols = { BD: -4, SD: -6, HH: -14, OHH: -12, RT: -14, CR: -12, T1: -8, T2: -8, FT: -7 };
+  for (const k of Object.keys(players)) players[k].volume.value = vols[k] ?? -10;
+  playerReady = true;
+}
+
+function triggerDrum(drum) {
+  if (!playerReady) return;
+  try {
+    const p    = players[drum];
+    const now  = Tone.now();
+    if (!p) return;
+    if (drum === 'SD') p.triggerAttackRelease('8n', now);
+    else if (['HH','OHH','RT','CR'].includes(drum)) {
+      const freq = { HH: 400, OHH: 420, RT: 350, CR: 280 };
+      p.triggerAttackRelease(freq[drum], '8n', now);
+    } else {
+      const pitch = { BD: 'C1', T1: 'D2', T2: 'A1', FT: 'F1' };
+      p.triggerAttackRelease(pitch[drum] || 'C1', '8n', now);
+    }
+  } catch (err) { /* ignore audio glitches */ }
+}
+
+async function togglePlay() {
+  if (isPlaying) { stopPlay(); return; }
+  await initAudio();
+  if (!playerReady) makeSynths();
+
+  isPlaying = true;
+  document.getElementById('play-btn').textContent = '⏸ Pauze';
+  currentBeat = 0;
+
+  const beatMs = (60 / tempo / subdivision) * 1000;
+  const ind    = document.getElementById('beat-indicator');
+
+  function tick() {
+    notes.filter(n => n.beat === currentBeat).forEach(n => triggerDrum(n.drum));
+    draw();
+    const barBeat = Math.floor(currentBeat / subdivision) % beatsPerBar + 1;
+    const bar     = Math.floor(currentBeat / subdivision / beatsPerBar) + 1;
+    ind.textContent = `Maat ${bar}, tel ${barBeat}`;
+    currentBeat = (currentBeat + 1) % totalBeats();
+    if (isPlaying) playTimer = setTimeout(tick, beatMs);
+  }
+  tick();
+}
+
+function stopPlay() {
+  isPlaying = false;
+  if (playTimer) clearTimeout(playTimer);
+  currentBeat = -1;
+  document.getElementById('play-btn').textContent = '▶ Afspelen';
+  document.getElementById('beat-indicator').textContent = '';
+  draw();
+}
+
+// ─────────────────────────────────────────────
+//  SAVE / LOAD / PRINT
+// ─────────────────────────────────────────────
+function saveFile() {
+  const data = {
+    version: 1,
+    beatsPerBar,
+    numBars,
+    tempo,
+    notes,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'drum-notatie.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  document.getElementById('status-msg').textContent = 'Opgeslagen als drum-notatie.json';
+}
+
+function loadFile() {
+  document.getElementById('file-input').click();
+}
+
+function handleFileLoad(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      beatsPerBar = data.beatsPerBar ?? 4;
+      numBars     = data.numBars     ?? 2;
+      tempo       = data.tempo       ?? 100;
+      notes       = data.notes       ?? [];
+      document.getElementById('tempo').value        = tempo;
+      document.getElementById('tempo-val').textContent = tempo;
+      document.getElementById('sig-sel').value      = beatsPerBar;
+      resizeCanvas();
+      document.getElementById('status-msg').textContent = `Geladen: ${file.name}`;
+    } catch {
+      document.getElementById('status-msg').textContent = 'Fout: ongeldig bestand.';
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function printScore() {
+  const dataUrl = canvas.toDataURL('image/png');
+  const win     = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Drum Notatie</title>
+    <style>body{margin:0;display:flex;justify-content:center;align-items:flex-start;padding:20px;}
+    img{max-width:100%;}</style></head>
+    <body><img src="${dataUrl}" onload="window.print();window.close()"></body></html>`);
+  win.document.close();
+}
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+resizeCanvas();
+</script>
+
+
+</body></html>
