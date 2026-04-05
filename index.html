@@ -198,6 +198,7 @@
   <button class="action-btn" onclick="clearAll()">Wis alles</button>
   <button class="action-btn" onclick="addBar()">+ Maat</button>
   <button class="action-btn" onclick="removeBar()">− Maat</button>
+  <button class="action-btn" onclick="addRow()">+ Regel</button>
   <button class="action-btn" id="eraser-btn" onclick="toggleEraser()">⌫ Gum</button>
   <button class="action-btn" onclick="saveFile()">💾 Opslaan</button>
   <button class="action-btn" onclick="loadFile()">📂 Inladen</button>
@@ -245,10 +246,12 @@ const DRUM_MAP = {
 // ─────────────────────────────────────────────
 const STAFF_TOP  = 60;
 const LINE_SPACE = 12;
+const ROW_HEIGHT = 240;
 
 let beatsPerBar  = 4;
 let subdivision  = 2;   // 2 = 8ths per beat
 let numBars      = 2;
+let barsPerRow   = 4;
 let tempo        = 100;
 let selectedDrum = 'BD';
 let erasing      = false;
@@ -268,15 +271,16 @@ const canvas = document.getElementById('staff');
 const ctx    = canvas.getContext('2d');
 
 const lineY      = line => STAFF_TOP + line * LINE_SPACE;
-const beatX      = b    => 80 + b * 36;
+const bpRowBeats = ()   => barsPerRow * beatsPerBar * subdivision;
+const rowOf      = b    => Math.floor(b / bpRowBeats());
+const colBeat    = b    => b % bpRowBeats();
+const beatX      = b    => 80 + colBeat(b) * 36;
+const numRows    = ()   => Math.ceil(numBars / barsPerRow);
 const totalBeats = ()   => numBars * beatsPerBar * subdivision;
 
-function getCanvasWidth() {
-  return Math.max(820, 80 + totalBeats() * 36 + 20);
-}
-
 function resizeCanvas() {
-  canvas.width = getCanvasWidth();
+  canvas.width  = Math.max(820, 80 + bpRowBeats() * 36 + 20);
+  canvas.height = numRows() * ROW_HEIGHT + 20;
   draw();
 }
 
@@ -303,6 +307,19 @@ function draw() {
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, w, canvas.height);
 
+  for (let row = 0; row < numRows(); row++) {
+    ctx.save();
+    ctx.translate(0, row * ROW_HEIGHT);
+    drawRow(row, C, w);
+    ctx.restore();
+  }
+}
+
+function drawRow(row, C, w) {
+  const firstBeat = row * bpRowBeats();
+  const rowBars   = Math.min(barsPerRow, numBars - row * barsPerRow);
+  const rowBeats  = rowBars * beatsPerBar * subdivision;
+
   // Staff lines (5 lines)
   for (let i = 0; i < 5; i++) {
     const y = lineY(i * 2 + 2);
@@ -318,8 +335,8 @@ function draw() {
   // Bar lines
   ctx.strokeStyle = C.barLine;
   ctx.lineWidth   = 1.5;
-  for (let b = 0; b <= numBars; b++) {
-    const x = beatX(b * beatsPerBar * subdivision);
+  for (let b = 0; b <= rowBars; b++) {
+    const x = beatX(firstBeat + b * beatsPerBar * subdivision);
     ctx.beginPath();
     ctx.moveTo(x, lineY(2));
     ctx.lineTo(x, lineY(10));
@@ -331,17 +348,20 @@ function draw() {
   ctx.fillStyle = C.text;
   ctx.fillText('%', 18, lineY(5) + 8);
 
-  // Time signature
-  ctx.font      = 'bold 16px serif';
-  ctx.fillStyle = C.text;
-  ctx.fillText(beatsPerBar, 42, lineY(4) + 4);
-  ctx.fillText('4',         42, lineY(7) + 4);
+  // Time signature (only on first row)
+  if (row === 0) {
+    ctx.font      = 'bold 16px serif';
+    ctx.fillStyle = C.text;
+    ctx.fillText(beatsPerBar, 42, lineY(4) + 4);
+    ctx.fillText('4',         42, lineY(7) + 4);
+  }
 
   // Beat slots
-  for (let b = 0; b < totalBeats(); b++) {
+  for (let bi = 0; bi < rowBeats; bi++) {
+    const b           = firstBeat + bi;
     const x           = beatX(b);
-    const isBeatStart = b % subdivision === 0;
-    const beatNum     = Math.floor(b / subdivision) % beatsPerBar + 1;
+    const isBeatStart = bi % subdivision === 0;
+    const beatNum     = Math.floor(bi / subdivision) % beatsPerBar + 1;
 
     // Playback highlight
     if (currentBeat === b && isPlaying) {
@@ -381,7 +401,7 @@ function draw() {
 
   // Instrument labels (left of staff)
   ctx.font      = '10px sans-serif';
-  ctx.fillStyle = dark ? '#888' : '#aaa';
+  ctx.fillStyle = C.ledger;
   [
     { line: -1, text: 'CR' },
     { line:  0, text: 'RD' },
@@ -393,12 +413,13 @@ function draw() {
     { line: 10, text: 'BD' },
   ].forEach(l => ctx.fillText(l.text, 4, lineY(l.line) + 4));
 
-  // Notes
+  // Notes for this row
   for (const n of notes) {
-    const x    = beatX(n.beat);
-    const y    = lineY(n.line);
-    const col  = n === hoveredNote ? '#2a7adb' : C.note;
-    const dm   = DRUM_MAP[n.drum];
+    if (rowOf(n.beat) !== row) continue;
+    const x   = beatX(n.beat);
+    const y   = lineY(n.line);
+    const col = n === hoveredNote ? '#2a7adb' : C.note;
+    const dm  = DRUM_MAP[n.drum];
 
     ctx.fillStyle   = col;
     ctx.strokeStyle = col;
@@ -455,7 +476,7 @@ canvas.addEventListener('mousemove', function(e) {
 });
 
 canvas.addEventListener('mousedown', function(e) {
-  const { mx, my } = canvasCoords(e);
+  const { mx, my, row, localY } = canvasCoords(e);
 
   if (erasing) {
     const n = findNoteNear(mx, my);
@@ -464,12 +485,12 @@ canvas.addEventListener('mousedown', function(e) {
     return;
   }
 
-  const closestBeat = snapToBeat(mx);
+  const closestBeat = snapToBeat(mx, row);
   if (closestBeat === null) return;
 
   const dm      = DRUM_MAP[selectedDrum];
   const targetY = lineY(dm.line);
-  if (Math.abs(my - targetY) > 18) return;
+  if (Math.abs(localY - targetY) > 18) return;
 
   const idx = notes.findIndex(n => n.beat === closestBeat && n.drum === selectedDrum);
   if (idx >= 0) {
@@ -483,16 +504,18 @@ canvas.addEventListener('mousedown', function(e) {
 });
 
 function canvasCoords(e) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    mx: (e.clientX - rect.left) * (canvas.width  / rect.width),
-    my: (e.clientY - rect.top)  * (canvas.height / rect.height),
-  };
+  const rect  = canvas.getBoundingClientRect();
+  const mx    = (e.clientX - rect.left) * (canvas.width  / rect.width);
+  const my    = (e.clientY - rect.top)  * (canvas.height / rect.height);
+  const row   = Math.floor(my / ROW_HEIGHT);
+  return { mx, my, row, localY: my - row * ROW_HEIGHT };
 }
 
-function snapToBeat(mx) {
+function snapToBeat(mx, row) {
+  const firstBeat = row * bpRowBeats();
+  const lastBeat  = Math.min(firstBeat + bpRowBeats(), totalBeats());
   let closest = null, dist = 99;
-  for (let b = 0; b < totalBeats(); b++) {
+  for (let b = firstBeat; b < lastBeat; b++) {
     const d = Math.abs(mx - beatX(b));
     if (d < dist) { dist = d; closest = b; }
   }
@@ -500,7 +523,10 @@ function snapToBeat(mx) {
 }
 
 function findNoteNear(mx, my) {
-  return notes.find(n => Math.abs(mx - beatX(n.beat)) < 14 && Math.abs(my - lineY(n.line)) < 14) || null;
+  return notes.find(n => {
+    const ny = rowOf(n.beat) * ROW_HEIGHT + lineY(n.line);
+    return Math.abs(mx - beatX(n.beat)) < 14 && Math.abs(my - ny) < 14;
+  }) || null;
 }
 
 // ─────────────────────────────────────────────
@@ -525,6 +551,7 @@ function toggleEraser() {
 
 function clearAll()   { notes = []; draw(); }
 function addBar()     { numBars++; resizeCanvas(); }
+function addRow()     { numBars += barsPerRow; resizeCanvas(); }
 function removeBar()  { if (numBars > 1) { numBars--; notes = notes.filter(n => n.beat < totalBeats()); resizeCanvas(); } }
 function updateTempo(){ tempo = parseInt(document.getElementById('tempo').value); document.getElementById('tempo-val').textContent = tempo; }
 
@@ -616,6 +643,7 @@ function saveFile() {
     version: 1,
     beatsPerBar,
     numBars,
+    barsPerRow,
     tempo,
     notes,
   };
@@ -641,6 +669,7 @@ function handleFileLoad(e) {
       const data = JSON.parse(ev.target.result);
       beatsPerBar = data.beatsPerBar ?? 4;
       numBars     = data.numBars     ?? 2;
+      barsPerRow  = data.barsPerRow  ?? 4;
       tempo       = data.tempo       ?? 100;
       notes       = data.notes       ?? [];
       document.getElementById('tempo').value        = tempo;
