@@ -328,8 +328,9 @@ function drawRow(row, C, w) {
   const firstBeat = row * bpRowBeats();
   const rowBars   = Math.min(barsPerRow, numBars - row * barsPerRow);
   const rowBeats  = rowBars * beatsPerBar * subdivision;
+  const rowEndX   = LABEL_W + rowBeats * slotW() + slotW() * 0.5;
 
-  // Staff lines (5 lines)
+  // Staff lines (5 lines) — only to end of last bar
   for (let i = 0; i < 5; i++) {
     const y = lineY(i * 2 + 2);
     ctx.strokeStyle = C.line;
@@ -337,7 +338,7 @@ function drawRow(row, C, w) {
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(50, y);
-    ctx.lineTo(w - 10, y);
+    ctx.lineTo(rowEndX, y);
     ctx.stroke();
   }
 
