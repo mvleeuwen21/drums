@@ -152,7 +152,19 @@
     /* ── Tempo ── */
     .tempo-row { display: flex; align-items: center; gap: 8px; }
     .tempo-row input[type=range] { width: 90px; accent-color: var(--selected); }
-    .tempo-row span { font-size: 13px; font-weight: 500; min-width: 42px; }
+
+    input[type=number] {
+      font-size: 13px;
+      font-weight: 500;
+      width: 58px;
+      padding: 3px 6px;
+      border-radius: 6px;
+      border: 0.5px solid var(--border2);
+      background: var(--bg);
+      color: var(--text);
+      text-align: center;
+    }
+    #copy-bar { width: 48px; }
 
     select {
       font-size: 12px;
@@ -193,9 +205,15 @@
 
   <div class="toolbar-group tempo-row">
     <span class="toolbar-label">Tempo</span>
-    <input type="range" id="tempo" min="40" max="220" value="100" step="1" oninput="updateTempo()">
-    <span id="tempo-val">100</span>
+    <input type="range" id="tempo-slider" min="40" max="220" value="100" step="1" oninput="updateTempoFromSlider()">
+    <input type="number" id="tempo-val" value="100" min="40" max="220" step="1" oninput="updateTempoFromInput()">
     <span style="font-size:11px;color:var(--text2)">bpm</span>
+  </div>
+
+  <div class="toolbar-group">
+    <span class="toolbar-label">Kopieer maat</span>
+    <input type="number" id="copy-bar" value="1" min="1" step="1" placeholder="nr">
+    <button class="drum-btn" onclick="copyBar()">⎘ Kopieer</button>
   </div>
 
   <button class="action-btn play" id="play-btn" onclick="togglePlay()">▶ Afspelen</button>
@@ -564,7 +582,43 @@ function clearAll()   { notes = []; draw(); }
 function addBar()     { numBars++; resizeCanvas(); }
 function addRow()     { numBars += barsPerRow; resizeCanvas(); }
 function removeBar()  { if (numBars > 1) { numBars--; notes = notes.filter(n => n.beat < totalBeats()); resizeCanvas(); } }
-function updateTempo(){ tempo = parseInt(document.getElementById('tempo').value); document.getElementById('tempo-val').textContent = tempo; }
+
+function updateTempoFromSlider() {
+  tempo = parseInt(document.getElementById('tempo-slider').value);
+  document.getElementById('tempo-val').value = tempo;
+}
+function updateTempoFromInput() {
+  const v = parseInt(document.getElementById('tempo-val').value);
+  if (isNaN(v)) return;
+  tempo = Math.max(40, Math.min(220, v));
+  document.getElementById('tempo-slider').value = tempo;
+}
+
+function copyBar() {
+  const barNum = parseInt(document.getElementById('copy-bar').value);
+  if (isNaN(barNum) || barNum < 1 || barNum > numBars) {
+    document.getElementById('status-msg').textContent = `Ongeldige maat (1–${numBars}).`;
+    return;
+  }
+  const barSize  = beatsPerBar * subdivision;
+  const srcStart = (barNum - 1) * barSize;
+  const srcEnd   = barNum * barSize;
+
+  // Save copies of the source bar notes before shifting
+  const copied = notes
+    .filter(n => n.beat >= srcStart && n.beat < srcEnd)
+    .map(n => ({ ...n, beat: n.beat + barSize }));
+
+  // Shift all notes after the source bar one bar forward
+  notes.forEach(n => { if (n.beat >= srcEnd) n.beat += barSize; });
+
+  // Insert the copied notes
+  notes.push(...copied);
+
+  numBars++;
+  resizeCanvas();
+  document.getElementById('status-msg').textContent = `Maat ${barNum} gekopieerd naar maat ${barNum + 1}.`;
+}
 
 function changeSig() {
   beatsPerBar = parseInt(document.getElementById('sig-sel').value);
@@ -683,8 +737,8 @@ function handleFileLoad(e) {
       barsPerRow  = data.barsPerRow  ?? 4;
       tempo       = data.tempo       ?? 100;
       notes       = data.notes       ?? [];
-      document.getElementById('tempo').value        = tempo;
-      document.getElementById('tempo-val').textContent = tempo;
+      document.getElementById('tempo-slider').value = tempo;
+      document.getElementById('tempo-val').value    = tempo;
       document.getElementById('sig-sel').value      = beatsPerBar;
       resizeCanvas();
       document.getElementById('status-msg').textContent = `Geladen: ${file.name}`;
