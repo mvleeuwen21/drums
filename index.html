@@ -454,8 +454,8 @@ function drawRow(row, C, w, dark) {
           const runSet  = new Set(uniqueBeats.slice(runStart, k));
           const group   = dirNotes.filter(n => runSet.has(colBeat(n.beat)));
           const beamY   = dir === 1
-            ? Math.max(...group.map(n => lineY(n.line) + 36))
-            : Math.min(...group.map(n => lineY(n.line) - 36));
+            ? Math.min(...group.map(n => lineY(n.line) - 36))
+            : Math.max(...group.map(n => lineY(n.line) + 36));
           const bs      = [...runSet].sort((a, b) => a - b);
           const x0      = LABEL_W + bs[0] * slotW() + 7;
           const x1      = LABEL_W + bs[bs.length - 1] * slotW() + 7;
@@ -465,7 +465,7 @@ function drawRow(row, C, w, dark) {
           ctx.lineWidth   = 1.5;
           for (const n of group) {
             ctx.beginPath();
-            ctx.moveTo(beatX(n.beat) + 7, lineY(n.line) + (dir === 1 ? 5 : -5));
+            ctx.moveTo(beatX(n.beat) + 7, lineY(n.line) + (dir === 1 ? -5 : 5));
             ctx.lineTo(beatX(n.beat) + 7, beamY);
             ctx.stroke();
             beamedNotes.add(n);
@@ -509,8 +509,8 @@ function drawRow(row, C, w, dark) {
 
     // Standalone stem (only for notes not in a beam group)
     if (!beamedNotes.has(n)) {
-      const stemY1 = n.line < 5 ? y + 5 : y - 5;
-      const stemY2 = n.line < 5 ? y + 36 : y - 36;
+      const stemY1 = n.line < 5 ? y - 5 : y + 5;
+      const stemY2 = n.line < 5 ? y - 36 : y + 36;
       ctx.strokeStyle = col;
       ctx.lineWidth   = 1.5;
       ctx.beginPath();
